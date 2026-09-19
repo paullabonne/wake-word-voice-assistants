@@ -122,20 +122,30 @@ voice_assistant:
         condition:
           - media_player.is_announcing:
         timeout: 0.5s
-    # Restart only mWW if enabled; streaming wake words automatically restart
+    # Wait for the response to finish before listening again, but do not wait
+    # forever if the assistant or speaker gets stuck.
+    - wait_until:
+        condition:
+          - and:
+              - not:
+                  voice_assistant.is_running
+              - not:
+                  speaker.is_playing
+        timeout: 30s
+    # Do not leave the device stuck in the TTS state if the assistant or
+    # speaker fails to become idle. The LED is solid blue while TTS is active.
     - if:
         condition:
-          - lambda: |-
-              return id(wake_word_engine_location).current_option() == "On device";
+          - speaker.is_playing:
         then:
-          - wait_until:
-              - and:
-                  - not:
-                      voice_assistant.is_running:
-                  - not:
-                      speaker.is_playing:
-          - lambda: id(va).set_use_wake_word(false);
-          - micro_wake_word.start:
+          - media_player.stop:
+              announcement: true
+    - if:
+        condition:
+          - voice_assistant.is_running:
+        then:
+          - voice_assistant.stop:
+    - script.execute: start_wake_word
     - script.execute: reset_led
   on_error:
     - light.turn_on:
@@ -373,7 +383,3 @@ micro_wake_word:
   models:
     - model: okay_nabu
       id: okay_nabu
-    - model: hey_mycroft
-      id: hey_mycroft
-    - model: hey_jarvis
-      id: hey_jarvis
